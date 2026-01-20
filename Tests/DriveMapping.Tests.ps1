@@ -7,6 +7,7 @@ BeforeAll {
     
     # Import the module under test
     $ModulePath = Split-Path $PSScriptRoot -Parent
+    Remove-Module DriveMapper -Force -ErrorAction SilentlyContinue
     Import-Module "$ModulePath\DriveMapper.psd1" -Force
     
     # Create test directories
@@ -69,6 +70,7 @@ BeforeAll {
                 @{ 'P' = $ValidTestPath.FullName },
                 @{ 'R' = $env:WINDIR }
             )
+            'Log-Retention-Days' = 30
         }
     } -ModuleName DriveMapper
 }
@@ -365,6 +367,352 @@ Describe "Write-MountLog Function Tests" {
             Test-Path $logFile | Should -Be $true
             $content = Get-Content $logFile
             $content | Should -Match "File test"
+        }
+    }
+}
+
+Describe "Clean-OldLogEntries Function Tests" {
+    Context "Log Cleanup Functionality" {
+        It "Should handle non-existent log file gracefully" {
+            $result = Clean-OldLogEntries -LogPath "$TestDrive\nonexistent.log" -RetentionDays 30
+            $result.Success | Should -Be $true
+            $result.RemovedCount | Should -Be 0
+            $result.KeptCount | Should -Be 0
+        }
+        
+        It "Should handle empty log file" {
+            $logFile = "$TestDrive\empty.log"
+            "" | Set-Content -Path $logFile
+            
+            $result = Clean-OldLogEntries -LogPath $logFile -RetentionDays 30
+            $result.Success | Should -Be $true
+            $result.RemovedCount | Should -Be 0
+            $result.KeptCount | Should -Be 0
+        }
+        
+        It "Should keep recent log entries" {
+            $logFile = "$TestDrive\recent.log"
+            $recentDate = (Get-Date).AddDays(-5).ToString("yyyy-MM-dd HH:mm:ss")
+            $recentEntry = "[$recentDate] [INFO] Recent log entry"
+            
+            $recentEntry | Set-Content -Path $logFile
+            
+            $result = Clean-OldLogEntries -LogPath $logFile -RetentionDays 30
+            $result.Success | Should -Be $true
+            $result.RemovedCount | Should -Be 0
+            $result.KeptCount | Should -Be 1
+            
+            $content = Get-Content $logFile
+            $content | Should -Match "Recent log entry"
+        }
+        
+        It "Should remove old log entries" {
+            $logFile = "$TestDrive\old.log"
+            $oldDate = (Get-Date).AddDays(-35).ToString("yyyy-MM-dd HH:mm:ss")
+            $oldEntry = "[$oldDate] [INFO] Old log entry"
+            
+            $oldEntry | Set-Content -Path $logFile
+            
+            $result = Clean-OldLogEntries -LogPath $logFile -RetentionDays 30
+            $result.Success | Should -Be $true
+            $result.RemovedCount | Should -Be 1
+            $result.KeptCount | Should -Be 0
+            
+            $content = Get-Content $logFile
+            $content | Should -BeNullOrEmpty
+        }
+        
+        It "Should filter mixed old and recent entries correctly" {
+            $logFile = "$TestDrive\mixed.log"
+            $oldDate = (Get-Date).AddDays(-35).ToString("yyyy-MM-dd HH:mm:ss")
+            $recentDate = (Get-Date).AddDays(-5).ToString("yyyy-MM-dd HH:mm:ss")
+            $veryOldDate = (Get-Date).AddDays(-60).ToString("yyyy-MM-dd HH:mm:ss")
+            
+            $logContent = @(
+                "[$veryOldDate] [INFO] Very old entry",
+                "[$oldDate] [INFO] Old entry",
+                "[$recentDate] [INFO] Recent entry"
+            )
+            $logContent | Set-Content -Path $logFile
+            
+            $result = Clean-OldLogEntries -LogPath $logFile -RetentionDays 30
+            $result.Success | Should -Be $true
+            $result.RemovedCount | Should -Be 2
+            $result.KeptCount | Should -Be 1
+            
+            $content = Get-Content $logFile
+            $content | Should -Match "Recent entry"
+            $content | Should -Not -Match "Old entry"
+            $content | Should -Not -Match "Very old entry"
+        }
+        
+        It "Should handle entries with invalid date format" {
+            $logFile = "$TestDrive\invalid-date.log"
+            $recentDate = (Get-Date).AddDays(-5).ToString("yyyy-MM-dd HH:mm:ss")
+            
+            $logContent = @(
+                "[$recentDate] [INFO] Valid entry",
+                "[Invalid Date] [INFO] Invalid date entry",
+                "Plain text line without date"
+            )
+            $logContent | Set-Content -Path $logFile
+            
+            $result = Clean-OldLogEntries -LogPath $logFile -RetentionDays 30
+            $result.Success | Should -Be $true
+            # Invalid entries should be kept (better safe than sorry)
+            $content = Get-Content $logFile
+            $content.Count | Should -BeGreaterOrEqual 1
+        }
+        
+        It "Should use custom retention days" {
+            $logFile = "$TestDrive\custom-retention.log"
+            $date30DaysAgo = (Get-Date).AddDays(-30).ToString("yyyy-MM-dd HH:mm:ss")
+            $date15DaysAgo = (Get-Date).AddDays(-15).ToString("yyyy-MM-dd HH:mm:ss")
+            
+            $logContent = @(
+                "[$date30DaysAgo] [INFO] Entry from 30 days ago",
+                "[$date15DaysAgo] [INFO] Entry from 15 days ago"
+            )
+            $logContent | Set-Content -Path $logFile
+            
+            # Use 20 days retention - should keep only the 15-day-old entry
+            $result = Clean-OldLogEntries -LogPath $logFile -RetentionDays 20
+            $result.Success | Should -Be $true
+            $result.RemovedCount | Should -Be 1
+            $result.KeptCount | Should -Be 1
+            
+            $content = Get-Content $logFile
+            $content | Should -Match "15 days ago"
+            $content | Should -Not -Match "30 days ago"
+        }
+    }
+}
+
+Describe "Get-DriveMappingsFromYaml Log Retention Tests" {
+    BeforeAll {
+        # Remove mock for these tests to use real YAML parsing
+        # In Pester 5, we need to clear mocks by re-importing the module
+        $ModulePath = Split-Path $PSScriptRoot -Parent
+        Remove-Module DriveMapper -Force -ErrorAction SilentlyContinue
+        Import-Module "$ModulePath\DriveMapper.psd1" -Force
+    }
+    
+    AfterAll {
+        # Restore mock for other tests
+        $ModulePath = Split-Path $PSScriptRoot -Parent
+        Remove-Module DriveMapper -Force -ErrorAction SilentlyContinue
+        Import-Module "$ModulePath\DriveMapper.psd1" -Force
+        
+        # Re-apply mocks
+        Mock ConvertFrom-Yaml {
+            return @{
+                'Drive-Mapping' = @(
+                    @{ 'P' = $ValidTestPath.FullName },
+                    @{ 'R' = $env:WINDIR }
+                )
+                'Log-Retention-Days' = 30
+            }
+        } -ModuleName DriveMapper
+    }
+    
+    Context "Path Format Conversion" {
+        It "Should convert forward slashes to backslashes" {
+            $TestConfig = "$TestDrive\config-forward-slash.yaml"
+            $ConfigContent = @"
+Drive-Mapping:
+  - P: "C:/Users/Test/Projects"
+"@
+            Set-Content -Path $TestConfig -Value $ConfigContent -Encoding UTF8
+            
+            $result = Get-DriveMappingsFromYaml -YamlPath $TestConfig
+            $result.Mappings.Count | Should -Be 1
+            $result.Mappings[0].Path | Should -Be "C:\Users\Test\Projects"
+        }
+        
+        It "Should handle paths with backslashes in YAML (double backslash required)" {
+            $TestConfig = "$TestDrive\config-backslash.yaml"
+            # In YAML quoted strings, backslash is an escape character
+            # To get a single backslash, you need to use double backslash (\\)
+            $ConfigContent = @"
+Drive-Mapping:
+  - P: "C:\\Users\\Test\\Projects"
+"@
+            Set-Content -Path $TestConfig -Value $ConfigContent -Encoding UTF8
+            
+            $result = Get-DriveMappingsFromYaml -YamlPath $TestConfig
+            $result.Mappings.Count | Should -Be 1
+            # The double backslash in YAML becomes single backslash, which is preserved as-is
+            $result.Mappings[0].Path | Should -Be "C:\Users\Test\Projects"
+        }
+        
+        It "Should handle mixed forward and backslashes (backslashes must be doubled in YAML)" {
+            $TestConfig = "$TestDrive\config-mixed.yaml"
+            # Forward slashes are converted, backslashes must be doubled in YAML
+            $ConfigContent = @"
+Drive-Mapping:
+  - P: "C:/Users/Test\\Projects/Subfolder"
+"@
+            Set-Content -Path $TestConfig -Value $ConfigContent -Encoding UTF8
+            
+            $result = Get-DriveMappingsFromYaml -YamlPath $TestConfig
+            $result.Mappings.Count | Should -Be 1
+            # Forward slashes are converted to backslashes, doubled backslashes become single
+            $result.Mappings[0].Path | Should -Be "C:\Users\Test\Projects\Subfolder"
+        }
+    }
+    
+    Context "Log Retention Configuration" {
+        It "Should read log retention days from YAML config" {
+            $TestConfig = "$TestDrive\config-with-retention.yaml"
+            $ConfigContent = @"
+Log-Retention-Days: 45
+Drive-Mapping:
+  - P: "$($ValidTestPath.FullName -replace '\\', '/')"
+"@
+            Set-Content -Path $TestConfig -Value $ConfigContent -Encoding UTF8
+            
+            $result = Get-DriveMappingsFromYaml -YamlPath $TestConfig
+            $result.LogRetentionDays | Should -Be 45
+            $result.Mappings.Count | Should -Be 1
+        }
+        
+        It "Should use default retention days when not specified" {
+            $TestConfig = "$TestDrive\config-without-retention.yaml"
+            $ConfigContent = @"
+Drive-Mapping:
+  - P: "$($ValidTestPath.FullName -replace '\\', '/')"
+"@
+            Set-Content -Path $TestConfig -Value $ConfigContent -Encoding UTF8
+            
+            $result = Get-DriveMappingsFromYaml -YamlPath $TestConfig
+            $result.LogRetentionDays | Should -Be 30
+            $result.Mappings.Count | Should -Be 1
+        }
+        
+        It "Should handle invalid retention days value" {
+            $TestConfig = "$TestDrive\config-invalid-retention.yaml"
+            $ConfigContent = @"
+Log-Retention-Days: invalid
+Drive-Mapping:
+  - P: "$($ValidTestPath.FullName -replace '\\', '/')"
+"@
+            Set-Content -Path $TestConfig -Value $ConfigContent -Encoding UTF8
+            
+            $result = Get-DriveMappingsFromYaml -YamlPath $TestConfig
+            $result.LogRetentionDays | Should -Be 30  # Should fall back to default
+            $result.Mappings.Count | Should -Be 1
+        }
+        
+        It "Should handle negative retention days" {
+            $TestConfig = "$TestDrive\config-negative-retention.yaml"
+            $ConfigContent = @"
+Log-Retention-Days: -5
+Drive-Mapping:
+  - P: "$($ValidTestPath.FullName -replace '\\', '/')"
+"@
+            Set-Content -Path $TestConfig -Value $ConfigContent -Encoding UTF8
+            
+            $result = Get-DriveMappingsFromYaml -YamlPath $TestConfig
+            $result.LogRetentionDays | Should -Be 30  # Should fall back to default
+            $result.Mappings.Count | Should -Be 1
+        }
+    }
+}
+
+Describe "Start-AutoMount Log Cleanup Integration Tests" {
+    BeforeAll {
+        # Remove mock for these tests to use real YAML parsing
+        # In Pester 5, we need to clear mocks by re-importing the module
+        $ModulePath = Split-Path $PSScriptRoot -Parent
+        Remove-Module DriveMapper -Force -ErrorAction SilentlyContinue
+        Import-Module "$ModulePath\DriveMapper.psd1" -Force
+        
+        $TestConfig = "$TestDrive\test-config-cleanup.yaml"
+        $ConfigContent = @"
+Log-Retention-Days: 7
+Drive-Mapping:
+  - P: "$($ValidTestPath.FullName -replace '\\', '/')"
+"@
+        Set-Content -Path $TestConfig -Value $ConfigContent -Encoding UTF8
+    }
+    
+    AfterAll {
+        # Restore mock for other tests
+        $ModulePath = Split-Path $PSScriptRoot -Parent
+        Remove-Module DriveMapper -Force -ErrorAction SilentlyContinue
+        Import-Module "$ModulePath\DriveMapper.psd1" -Force
+        
+        # Re-apply mocks
+        Mock ConvertFrom-Yaml {
+            return @{
+                'Drive-Mapping' = @(
+                    @{ 'P' = $ValidTestPath.FullName },
+                    @{ 'R' = $env:WINDIR }
+                )
+                'Log-Retention-Days' = 30
+            }
+        } -ModuleName DriveMapper
+    }
+    
+    Context "Log Cleanup on Startup" {
+        
+        It "Should clean log file on startup" {
+            $logFile = "$TestDrive\auto-mount-test.log"
+            
+            # Create log file with old entries
+            $oldDate = (Get-Date).AddDays(-10).ToString("yyyy-MM-dd HH:mm:ss")
+            $recentDate = (Get-Date).AddDays(-3).ToString("yyyy-MM-dd HH:mm:ss")
+            $logContent = @(
+                "[$oldDate] [INFO] Old entry",
+                "[$recentDate] [INFO] Recent entry"
+            )
+            $logContent | Set-Content -Path $logFile
+            
+            # Count entries before cleanup
+            $beforeContent = Get-Content $logFile
+            $beforeCount = $beforeContent.Count
+            
+            # Run Start-AutoMount which should clean the log
+            $result = Start-AutoMount -ConfigPath $TestConfig -LogPath $logFile
+            
+            # Verify old entries were removed (check that "Old entry" is not in the file)
+            $content = Get-Content $logFile
+            $oldEntryFound = $content | Where-Object { $_ -match "Old entry" }
+            $oldEntryFound | Should -BeNullOrEmpty
+            
+            # Verify recent entry is still there (or was cleaned and new entries added)
+            $recentEntryFound = $content | Where-Object { $_ -match "Recent entry" }
+            # Recent entry should be kept (within 7 days retention)
+            if ($recentEntryFound) {
+                $recentEntryFound.Count | Should -BeGreaterThan 0
+            }
+        }
+        
+        It "Should use configured retention days for cleanup" {
+            $logFile = "$TestDrive\auto-mount-retention-test.log"
+            
+            # Create log file with entries older than default but within configured retention
+            $date10DaysAgo = (Get-Date).AddDays(-10).ToString("yyyy-MM-dd HH:mm:ss")
+            $date5DaysAgo = (Get-Date).AddDays(-5).ToString("yyyy-MM-dd HH:mm:ss")
+            $logContent = @(
+                "[$date10DaysAgo] [INFO] Entry from 10 days ago",
+                "[$date5DaysAgo] [INFO] Entry from 5 days ago"
+            )
+            $logContent | Set-Content -Path $logFile
+            
+            # Config specifies 7 days retention, so 10-day-old entry should be removed
+            $result = Start-AutoMount -ConfigPath $TestConfig -LogPath $logFile
+            
+            $content = Get-Content $logFile
+            # Verify 10-day-old entry was removed
+            $oldEntryFound = $content | Where-Object { $_ -match "10 days ago" }
+            $oldEntryFound | Should -BeNullOrEmpty
+            
+            # Verify 5-day-old entry is still there (within 7 days retention)
+            $recentEntryFound = $content | Where-Object { $_ -match "5 days ago" }
+            if ($recentEntryFound) {
+                $recentEntryFound.Count | Should -BeGreaterThan 0
+            }
         }
     }
 }

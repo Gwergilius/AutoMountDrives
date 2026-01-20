@@ -301,9 +301,25 @@ function Start-AutoMount {
             return @{ Success = $false; ExitCode = 1; Message = $errorMsg }
         }
         
-        # Load drive mappings
+        # Load drive mappings first to get log retention configuration
         try {
-            $rawDriveMappings = Get-DriveMappingsFromYaml -YamlPath $ConfigPath -LogPath $LogPath
+            $yamlResult = Get-DriveMappingsFromYaml -YamlPath $ConfigPath -LogPath $LogPath
+            $logRetentionDays = $yamlResult.LogRetentionDays
+            $rawDriveMappings = $yamlResult.Mappings
+            
+            # Clean old log entries with configured retention period
+            try {
+                Write-MountLog -Message "Cleaning log entries older than $logRetentionDays days..." -Level "INFO" -LogPath $LogPath
+                $cleanupResult = Clean-OldLogEntries -LogPath $LogPath -RetentionDays $logRetentionDays
+                if ($cleanupResult.Success) {
+                    Write-MountLog -Message "Log cleanup completed. Removed $($cleanupResult.RemovedCount) old entries, kept $($cleanupResult.KeptCount) entries." -Level "INFO" -LogPath $LogPath
+                } else {
+                    Write-MountLog -Message "Log cleanup failed: $($cleanupResult.Message)" -Level "WARN" -LogPath $LogPath
+                }
+            } catch {
+                Write-MountLog -Message "Error during log cleanup: $($_.Exception.Message). Continuing..." -Level "WARN" -LogPath $LogPath
+            }
+            
             $DriveMappings = @($rawDriveMappings) | Where-Object {
                 $_ -and
                 -not [string]::IsNullOrWhiteSpace($_.Drive) -and
@@ -408,6 +424,110 @@ function Start-AutoMount {
     }
 }
 
+# Function to clean old log entries from log file
+function Clean-OldLogEntries {
+    <#
+    .SYNOPSIS
+    Removes log entries older than the specified retention period from the log file.
+    
+    .DESCRIPTION
+    Reads the log file line by line, filters out entries older than the retention period,
+    and writes back only the entries that should be kept. The log file format is:
+    [yyyy-MM-dd HH:mm:ss] [LEVEL] Message
+    
+    .PARAMETER LogPath
+    Path to the log file to clean.
+    
+    .PARAMETER RetentionDays
+    Number of days to retain log entries. Entries older than this will be removed.
+    Default is 30 days.
+    
+    .EXAMPLE
+    Clean-OldLogEntries -LogPath "C:\Logs\auto-mount.log" -RetentionDays 30
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath,
+        
+        [Parameter(Mandatory = $false)]
+        [int]$RetentionDays = 30
+    )
+    
+    try {
+        # Check if log file exists
+        if (-not (Test-Path -Path $LogPath)) {
+            Write-MountLog -Message "Log file does not exist: $LogPath. Nothing to clean." -Level "INFO" -LogPath $null
+            return @{ Success = $true; RemovedCount = 0; KeptCount = 0 }
+        }
+        
+        # Calculate cutoff date
+        $cutoffDate = (Get-Date).AddDays(-$RetentionDays)
+        Write-MountLog -Message "Cleaning log entries older than $RetentionDays days (before $($cutoffDate.ToString('yyyy-MM-dd HH:mm:ss')))" -Level "INFO" -LogPath $null
+        
+        # Read all log entries
+        $logEntries = Get-Content -Path $LogPath -ErrorAction Stop
+        if (-not $logEntries -or $logEntries.Count -eq 0) {
+            Write-MountLog -Message "Log file is empty. Nothing to clean." -Level "INFO" -LogPath $null
+            return @{ Success = $true; RemovedCount = 0; KeptCount = 0 }
+        }
+        
+        # Filter entries by date
+        $keptEntries = @()
+        $removedCount = 0
+        
+        foreach ($entry in $logEntries) {
+            # Parse timestamp from log entry format: [yyyy-MM-dd HH:mm:ss] [LEVEL] Message
+            if ($entry -match '^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]') {
+                $entryDateStr = $matches[1]
+                try {
+                    $entryDate = [DateTime]::ParseExact($entryDateStr, "yyyy-MM-dd HH:mm:ss", $null)
+                    
+                    # Keep entry if it's newer than cutoff date
+                    if ($entryDate -ge $cutoffDate) {
+                        $keptEntries += $entry
+                    } else {
+                        $removedCount++
+                    }
+                } catch {
+                    # If date parsing fails, keep the entry (better safe than sorry)
+                    Write-MountLog -Message "Warning: Could not parse date from log entry: $entry" -Level "WARN" -LogPath $null
+                    $keptEntries += $entry
+                }
+            } else {
+                # If entry doesn't match expected format, keep it (might be a header or special line)
+                $keptEntries += $entry
+            }
+        }
+        
+        # Write back kept entries
+        if ($keptEntries.Count -gt 0) {
+            $keptEntries | Set-Content -Path $LogPath -ErrorAction Stop
+        } else {
+            # If no entries to keep, create empty file
+            "" | Set-Content -Path $LogPath -ErrorAction Stop
+        }
+        
+        Write-MountLog -Message "Log cleanup completed. Removed $removedCount entries, kept $($keptEntries.Count) entries." -Level "INFO" -LogPath $null
+        
+        return @{ 
+            Success = $true
+            RemovedCount = $removedCount
+            KeptCount = $keptEntries.Count
+        }
+    }
+    catch {
+        $errorMsg = "Error cleaning log file '$LogPath': $($_.Exception.Message)"
+        Write-MountLog -Message $errorMsg -Level "ERROR" -LogPath $null
+        return @{ 
+            Success = $false
+            Message = $errorMsg
+            RemovedCount = 0
+            KeptCount = 0
+        }
+    }
+}
+
 # Function to load drive mappings from YAML file
 function Get-DriveMappingsFromYaml {
     [CmdletBinding()]
@@ -455,6 +575,21 @@ function Get-DriveMappingsFromYaml {
             throw "Invalid YAML structure. Expected 'Drive-Mapping' section not found"
         }
         
+        # Get log retention days from config (default: 30)
+        $logRetentionDays = 30
+        if ($yamlData.'Log-Retention-Days') {
+            try {
+                $logRetentionDays = [int]$yamlData.'Log-Retention-Days'
+                if ($logRetentionDays -lt 0) {
+                    Write-MountLog -Message "Invalid Log-Retention-Days value ($logRetentionDays). Using default: 30" -Level "WARN" -LogPath $LogPath
+                    $logRetentionDays = 30
+                }
+            } catch {
+                Write-MountLog -Message "Could not parse Log-Retention-Days from config. Using default: 30" -Level "WARN" -LogPath $LogPath
+                $logRetentionDays = 30
+            }
+        }
+        
         # Process drive mappings
         $driveMappings = $yamlData.'Drive-Mapping'
         $mappings = @()
@@ -500,7 +635,12 @@ function Get-DriveMappingsFromYaml {
         }
         
         Write-MountLog -Message "Successfully loaded $processedCount drive mappings from YAML" -Level "INFO" -LogPath $LogPath
-        return $mappings
+        
+        # Return both mappings and log retention days
+        return @{
+            Mappings = $mappings
+            LogRetentionDays = $logRetentionDays
+        }
         
     }
     catch {

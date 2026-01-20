@@ -36,5 +36,6 @@ Export-ModuleMember -Function @(
     'Write-MountLog',
     'Get-DriveMappingsFromYaml',
     'Add-SubstMapping',
-    'Remove-SubstMapping'
+    'Remove-SubstMapping',
+    'Clean-OldLogEntries'
 )

@@ -19,7 +19,8 @@
         'Write-MountLog',
         'Get-DriveMappingsFromYaml',
         'Add-SubstMapping',
-        'Remove-SubstMapping'
+        'Remove-SubstMapping',
+        'Clean-OldLogEntries'
     )
     
     # Cmdlets to export from this module

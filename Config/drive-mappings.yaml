@@ -1,3 +1,7 @@
+# Log retention configuration (in days)
+# Older log entries will be removed on startup
+Log-Retention-Days: 30
+
 Drive-Mapping:
   - P: "C:/Users/GergelyToth2/OneDrive - EPAM/Projects/Bayer"
   - R: "C:/Users/GergelyToth2/source/repos"
