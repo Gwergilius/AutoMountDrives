@@ -1,0 +1,60 @@
+# Kommunikációs Irányelvek
+
+## Nyelv és Stílus
+
+### Magyar Nyelv Használata
+- Minden kommunikáció magyar nyelven
+- Tegező forma használata (te, neked, stb.)
+- Formális megszólítás nélkül
+- Barátságos és közvetlen hangnem
+
+### Kód Dokumentáció
+- XML dokumentáció angol nyelven
+- Paraméter leírások angol
+- Példák angol kommentekkel
+- Hibüzenetek angol nyelven
+- Git commit üzenetek angol nyelven
+
+### Teszt Leírások
+- Teszt metódus nevek angolul (konvenció)
+- Teszt kommentek angolul
+- Arrange-Act-Assert angol kommentekkel
+- Edge case leírások angolul
+
+## Fejlesztési Kommunikáció
+
+### Kód Változtatások
+- Részletes magyarázat minden változtatáshoz
+- Miért kell a változtatás
+- Hogyan működik az új funkció
+- Milyen teszteket kell írni
+
+### Hibajavítások
+- Magyar hiba leírás
+- Reprodukálási lépések magyarul
+- Javítás magyarázata
+- Tesztelési instrukciók
+
+### Új Funkciók
+- Funkció céljának magyarázata
+- Használati példák magyarul
+- Dokumentáció frissítése
+- Tesztelési terv
+
+## Dokumentáció
+
+### README Fájlok
+- Projekt leírás angolul
+- Telepítési instrukciók angolul
+- Használati útmutató angolul
+- Fejlesztői információk angolul
+
+### Kód Kommentek
+- Bonyolult logika magyarázata
+- Üzleti szabályok angolul
+- Edge case-ek angol leírása
+- Jövőbeli fejlesztések megjegyzései
+description:
+globs:
+alwaysApply: true
+---

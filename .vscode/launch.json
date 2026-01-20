@@ -1,0 +1,48 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "PowerShell: Launch Current File",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${file}",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "PowerShell: Debug Pester Tests",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Tests/DriveMapping.Tests.ps1",
+            "cwd": "${workspaceFolder}",
+            "args": [],
+            "createTemporaryIntegratedConsole": false
+        },
+        {
+            "name": "PowerShell: Debug Auto-Mount Script",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${workspaceFolder}/Scripts/Auto-Mount-Drives.ps1",
+            "args": [
+                "-ConfigPath",
+                "${workspaceFolder}/Config/drive-mappings.yaml",
+                "-LogPath",
+                "${workspaceFolder}/Logs/debug.log"
+            ],
+            "cwd": "${workspaceFolder}",
+            "createTemporaryIntegratedConsole": false
+        },
+        {
+            "name": "PowerShell: Interactive Session",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "",
+            "cwd": "${workspaceFolder}",
+            "createTemporaryIntegratedConsole": true,
+            "args": [
+                "-NoProfile",
+                "-Command",
+                "Import-Module '${workspaceFolder}/DriveMapper.psd1' -Force; Write-Host 'DriveMapper module loaded. Available commands:' -ForegroundColor Green; Get-Command -Module DriveMapper | Format-Table Name, CommandType"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,12 @@
+{
+    "recommendations": [
+        "ms-vscode.powershell",
+        "ms-vscode.powershell-preview",
+        "pspester.pester-test",
+        "ms-vscode.test-adapter-converter",
+        "hbenl.vscode-test-explorer",
+        "redhat.vscode-yaml",
+        "ms-vscode.vscode-json",
+        "formulahendry.code-runner"
+    ]
+}

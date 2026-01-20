@@ -1,0 +1,131 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run All Pester Tests",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-Command",
+                "& { $env:AUTOMATED_TESTING = 'true'; Import-Module Pester -Force; Invoke-Pester -Path '${workspaceFolder}/Tests' -Output Detailed -CI; Remove-Item Env:AUTOMATED_TESTING -ErrorAction SilentlyContinue }"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Specific Pester Test",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-Command",
+                "& { $env:AUTOMATED_TESTING = 'true'; Import-Module Pester -Force; Invoke-Pester -Path '${file}' -Output Detailed; Remove-Item Env:AUTOMATED_TESTING -ErrorAction SilentlyContinue }"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Pester Tests with Coverage",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-Command",
+                "& { $env:AUTOMATED_TESTING = 'true'; Import-Module Pester -Force; $config = New-PesterConfiguration; $config.Run.Path = '${workspaceFolder}/Tests'; $config.CodeCoverage.Enabled = $true; $config.CodeCoverage.Path = '${workspaceFolder}/Public', '${workspaceFolder}/Scripts'; $config.Output.Verbosity = 'Detailed'; Invoke-Pester -Configuration $config; Remove-Item Env:AUTOMATED_TESTING -ErrorAction SilentlyContinue }"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Install Pester Module",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-Command",
+                "Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Import DriveMapper Module",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-Command",
+                "Import-Module '${workspaceFolder}/DriveMapper.psd1' -Force -Verbose"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Test Module Functions",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-Command",
+                "& { Import-Module '${workspaceFolder}/DriveMapper.psd1' -Force; Get-Command -Module DriveMapper }"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

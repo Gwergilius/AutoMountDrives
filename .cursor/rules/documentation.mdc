@@ -1,0 +1,72 @@
+# Documentation Standards
+
+## Markdown Documentation
+
+- All documentation files use **Markdown syntax** (`.md` extension)
+- Documentation is written in **English by default**
+- Use clear, descriptive headings with proper hierarchy
+- Use code blocks with language tags for code examples
+- Use tables for structured data when appropriate
+
+## Link Style
+
+- **Prefer reference-style links** over inline links
+- Collect all link references at the end of the document
+- Use descriptive link text that makes sense without the URL
+
+### Reference-Style Links (Preferred)
+
+```markdown
+See the [project documentation][docs] for more details.
+
+[docs]: docs/README.md
+```
+
+### Inline Links (Avoid)
+
+```markdown
+See the [project documentation](docs/README.md) for more details.
+```
+
+### Benefits of Reference-Style Links
+
+1. **Readability**: The document body is cleaner and easier to read
+2. **Maintainability**: URLs are centralized at the end, easier to update
+3. **Consistency**: All links follow the same pattern
+4. **Reusability**: Link references can be reused multiple times
+
+### Example Document Structure
+
+```markdown
+# Document Title
+
+## Section 1
+
+See the [project overview][overview] and [coding standards][standards].
+
+## Section 2
+
+For more information, check the [API documentation][api].
+
+[//]: #Document-and-image-references
+
+[overview]: docs/OVERVIEW.md
+[standards]: .cursor/rules/coding-standards.mdc
+[api]: docs/API.md
+```
+
+## Code Documentation
+
+- XML documentation for code (classes, methods, properties) follows the rules in `coding-standards.mdc`
+- Markdown documentation for project-level documentation (README, guides, etc.)
+- Both should be written in English
+
+## File Organization
+
+- Project documentation in `docs/` folder
+- Rules and standards in `.cursor/rules/` folder
+- README files at project root and in major subdirectories
+
+description: Documentation standards for Markdown files, including link style preferences
+globs:
+alwaysApply: true
