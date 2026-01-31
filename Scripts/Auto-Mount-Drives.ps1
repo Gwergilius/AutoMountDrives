@@ -12,7 +12,12 @@ $ModuleRoot = Split-Path $ScriptFolder -Parent
 
 # Set default paths relative to script location
 if (-not $ConfigPath) {
-    $ConfigPath = "$ModuleRoot\Config\drive-mappings.yaml"
+    # Determine config file name based on environment variable
+    $configFileName = "drive-mappings.yaml"
+    if ($env:DriveMapper_Config -and -not [string]::IsNullOrWhiteSpace($env:DriveMapper_Config)) {
+        $configFileName = "drive-mappings.$($env:DriveMapper_Config).yaml"
+    }
+    $ConfigPath = "$ModuleRoot\Config\$configFileName"
 }
 
 if (-not $LogPath) {

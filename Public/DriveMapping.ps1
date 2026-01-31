@@ -284,7 +284,14 @@ function Start-AutoMount {
     )
     
     # Set default paths if not provided
-    if (-not $ConfigPath) { $ConfigPath = "$script:ConfigPath\drive-mappings.yaml" }
+    if (-not $ConfigPath) {
+        # Determine config file name based on environment variable
+        $configFileName = "drive-mappings.yaml"
+        if ($env:DriveMapper_Config -and -not [string]::IsNullOrWhiteSpace($env:DriveMapper_Config)) {
+            $configFileName = "drive-mappings.$($env:DriveMapper_Config).yaml"
+        }
+        $ConfigPath = "$script:ConfigPath\$configFileName"
+    }
     if (-not $LogPath) { $LogPath = "$script:LogPath\auto-mount.log" }
     
     $hadAutomatedTesting = Test-Path Env:AUTOMATED_TESTING
